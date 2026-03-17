@@ -1,0 +1,46 @@
+name: tu-hacci Monitor
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: python monitor.py
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: |
+          python -c "
+          import requests, json, os
+          t = os.environ.get('LINE_CHANNEL_TOKEN','')
+          u = os.environ.get('LINE_USER_ID','')
+          if t and u:
+              requests.post('https://api.line.me/v2/bot/message/push',
+                  headers={'Authorization': f'Bearer {t}', 'Content-Type': 'application/json'},
+                  data=json.dumps({'to': u, 'messages': [{'type':'text','text':'GitHub Actions error'}]}))
+          "
